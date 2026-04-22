@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Orbital Defense System v3.0</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&family=Exo+2:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+
+  <!-- CesiumJS -->
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.108/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.108/Build/Cesium/Cesium.js"></script>
+
+  <!-- satellite.js (TLE propagation in browser) -->
+  <script src="https://cdn.jsdelivr.net/npm/satellite.js@4.1.3/dist/satellite.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="star-layer" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <header class="mission-header hud-panel">
+      <div class="brand-block">
+        <div class="brand-logo" aria-hidden="true">
+          <div class="brand-logo-core"></div>
+        </div>
+        <div class="brand-copy">
+          <h1>ORBITAL DEFENSE SYSTEM <span>v3.0</span></h1>
+          <p>MISSION CONTROL - CLASSIFIED LEVEL 4</p>
+        </div>
+      </div>
+
+      <div class="clock-block">
+        <div id="utc-clock" class="utc-clock">2026-04-19 &#9679; 00:00:00.0 UTC</div>
+        <div id="doy-clock" class="doy-clock">DOY 110</div>
+      </div>
+
+      <div class="header-status">
+        <div id="api-pill" class="status-pill">
+          <span class="status-dot dot-red"></span>
+          <span>API OFFLINE</span>
+        </div>
+        <div id="tle-pill" class="status-pill">
+          <span class="status-dot dot-yellow"></span>
+          <span>TLE FEED: STALE</span>
+        </div>
+        <div id="objects-pill" class="status-pill">
+          <span class="status-dot dot-cyan"></span>
+          <span>OBJECTS: 0 TRACKED</span>
+        </div>
+        <div id="threat-pill" class="status-pill">
+          <span class="status-dot dot-green"></span>
+          <span>THREAT LEVEL: NOMINAL</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="operations-grid">
+      <aside class="sidebar hud-panel">
+        <section class="sidebar-logo-wrap">
+          <div class="sidebar-logo" aria-hidden="true">
+            <div class="logo-ring ring-outer"></div>
+            <div class="logo-ring ring-inner"></div>
+            <div class="logo-planet"></div>
+          </div>
+          <div class="sidebar-logo-label">MISSION CTRL</div>
+        </section>
+
+        <section class="status-box">
+          <div class="status-box-head">
+            <span class="status-tag">LIVE TLE FEED</span>
+            <span class="status-live">
+              <span class="status-dot dot-green pulse-ring"></span>
+              ACTIVE
+            </span>
+          </div>
+          <dl class="status-box-grid">
+            <div>
+              <dt>CelesTrak</dt>
+              <dd id="sidebar-celestrak-status">LIVE</dd>
+            </div>
+            <div>
+              <dt>Objects</dt>
+              <dd id="sidebar-feed-count">0</dd>
+            </div>
+            <div>
+              <dt>Last Sync</dt>
+              <dd id="sidebar-last-sync">never</dd>
+            </div>
+            <div>
+              <dt>Mode</dt>
+              <dd id="sidebar-sync-mode">standby</dd>
+            </div>
+          </dl>
+          <button id="sidebar-sync-now" class="control-button secondary" type="button">SYNC NOW</button>
+        </section>
+
+        <nav id="side-nav" class="sidebar-nav" aria-label="Mission navigation">
+          <button class="nav-item active" data-view="overview" type="button">
+            <span class="nav-icon">&#127758;</span>
+            <span class="nav-label">OVERVIEW</span>
+            <span class="nav-badge" id="badge-overview">SYS</span>
+          </button>
+          <button class="nav-item" data-view="satellites" type="button">
+            <span class="nav-icon">&#128760;</span>
+            <span class="nav-label">SATELLITES</span>
+            <span class="nav-badge" id="badge-sat">0</span>
+          </button>
+          <button class="nav-item" data-view="debris" type="button">
+            <span class="nav-icon">&#9728;</span>
+            <span class="nav-label">DEBRIS</span>
+            <span class="nav-badge" id="badge-deb">0</span>
+          </button>
+          <button class="nav-item" data-view="predict" type="button">
+            <span class="nav-icon">&#9889;</span>
+            <span class="nav-label">PREDICT</span>
+            <span class="nav-badge">RUN</span>
+          </button>
+          <button class="nav-item" data-view="alerts" type="button">
+            <span class="nav-icon">&#128680;</span>
+            <span class="nav-label">ALERTS</span>
+            <span class="nav-badge" id="badge-alert">0</span>
+          </button>
+          <button class="nav-item" data-view="feeds" type="button">
+            <span class="nav-icon">&#128225;</span>
+            <span class="nav-label">TLE FEEDS</span>
+            <span class="nav-badge">7</span>
+          </button>
+          <button class="nav-item" data-view="analytics" type="button">
+            <span class="nav-icon">&#128202;</span>
+            <span class="nav-label">ANALYTICS</span>
+            <span class="nav-badge">3</span>
+          </button>
+          <button class="nav-item" data-view="settings" type="button">
+            <span class="nav-icon">&#9881;</span>
+            <span class="nav-label">SETTINGS</span>
+            <span class="nav-badge">OPS</span>
+          </button>
+        </nav>
+
+        <section class="health-box">
+          <div class="section-title-row">
+            <h2>SYSTEM HEALTH</h2>
+          </div>
+          <div class="health-line">
+            <span>CPU</span>
+            <span id="cpu-label">67%</span>
+          </div>
+          <div class="meter-track"><div id="cpu-meter" class="meter-fill"></div></div>
+          <div class="health-line">
+            <span>MEM</span>
+            <span id="mem-label">54%</span>
+          </div>
+          <div class="meter-track"><div id="mem-meter" class="meter-fill mem"></div></div>
+          <div class="health-foot">
+            <span>API: <b id="health-api">OFFLINE</b></span>
+            <span>SGP4: <b>ACTIVE</b></span>
+          </div>
+        </section>
+      </aside>
+
+      <section class="hero-panel hud-panel">
+        <div class="hero-head">
+          <div>
+            <h2>CESIUM ORBITAL OPERATIONS GLOBE</h2>
+            <p>Live CelesTrak propagation, conjunction overlays, and mission camera control.</p>
+          </div>
+          <div class="globe-controls">
+            <button id="btn-reset-view" class="control-button small secondary" type="button">RESET VIEW</button>
+            <button id="btn-day-night" class="control-button small secondary" type="button">DAY/NIGHT</button>
+            <button id="btn-follow-selected" class="control-button small secondary" type="button">FOLLOW SAT</button>
+            <button id="btn-toggle-orbits" class="control-button small secondary" type="button">ORBITS ON</button>
+          </div>
+        </div>
+
+        <div class="globe-stage">
+          <div id="cesium-container" aria-label="Cesium mission globe"></div>
+
+          <div class="globe-overlay-bar">
+            <div class="overlay-chip">
+              <span class="chip-label">TRACK MODE</span>
+              <span id="track-mode-text">GLOBAL</span>
+            </div>
+            <div class="overlay-chip">
+              <span class="chip-label">RENDER LOAD</span>
+              <span id="overlay-rendered-count">0 ENTITIES</span>
+            </div>
+            <div class="overlay-chip">
+              <span class="chip-label">LAST PREDICTION</span>
+              <span id="overlay-last-prediction">NONE</span>
+            </div>
+          </div>
+
+          <div id="hero-overlay" class="hero-overlay hidden">
+            <div class="hero-overlay-head">
+              <h3 id="overlay-title">Catalog View</h3>
+              <button id="overlay-close" class="control-button small secondary" type="button">CLOSE</button>
+            </div>
+            <div id="overlay-content" class="hero-overlay-content"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="telemetry-panel hud-panel">
+        <div class="section-title-row">
+          <h2>LIVE TELEMETRY</h2>
+          <span id="selected-feed-label" class="inline-tag">STANDBY</span>
+        </div>
+
+        <section id="telemetry-empty" class="telemetry-empty">
+          <div class="radar-scope">
+            <div class="radar-grid"></div>
+            <div class="radar-sweep"></div>
+          </div>
+          <p>Click any object on the globe to inspect.</p>
+        </section>
+
+        <section id="telemetry-content" class="telemetry-content hidden">
+          <div class="selected-head">
+            <div>
+              <h3 id="selected-name">NO OBJECT SELECTED</h3>
+              <p id="selected-norad">NORAD -</p>
+            </div>
+            <span id="selected-type-badge" class="type-badge">-</span>
+          </div>
+
+          <div class="telemetry-grid">
+            <div class="metric-tile altitude-tile">
+              <span class="metric-label">ALTITUDE</span>
+              <strong id="telemetry-alt" class="metric-value large">0.00 km</strong>
+              <div class="meter-track altitude-track">
+                <div id="telemetry-alt-progress" class="meter-fill"></div>
+              </div>
+              <div id="telemetry-orbit-band" class="metric-sub">LEO</div>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric-tile">
+                <span class="metric-label">LATITUDE</span>
+                <strong id="telemetry-lat" class="metric-value">+0.00&deg;</strong>
+              </div>
+              <div class="metric-tile">
+                <span class="metric-label">LONGITUDE</span>
+                <strong id="telemetry-lon" class="metric-value">+0.00&deg;</strong>
+              </div>
+            </div>
+
+            <div class="metric-tile">
+              <span class="metric-label">VELOCITY</span>
+              <strong id="telemetry-vel" class="metric-value">0.000 km/s</strong>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric-tile">
+                <span class="metric-label">PERIOD</span>
+                <strong id="telemetry-period" class="metric-value">0.0 min</strong>
+              </div>
+              <div class="metric-tile">
+                <span class="metric-label">INCLINATION</span>
+                <strong id="telemetry-inc" class="metric-value">0.00&deg;</strong>
+              </div>
+            </div>
+          </div>
+
+          <details class="tle-details">
+            <summary>VIEW FULL TLE</summary>
+            <pre id="telemetry-tle"></pre>
+          </details>
+
+          <button id="btn-predict-selected" class="control-button primary" type="button">PREDICT COLLISION</button>
+
+          <section class="elements-block">
+            <div class="section-title-row compact">
+              <h3>ORBITAL ELEMENTS</h3>
+            </div>
+            <div id="telemetry-elements" class="elements-grid"></div>
+          </section>
+        </section>
+
+        <section class="telemetry-log-block">
+          <div class="section-title-row compact">
+            <h3>LIVE TLE FEED LOG</h3>
+          </div>
+          <div id="tle-feed-log" class="log-list"></div>
+        </section>
+
+        <section class="risk-gauge-block">
+          <svg viewBox="0 0 220 128" class="risk-gauge" aria-label="System threat gauge">
+            <path d="M 20 104 A 90 90 0 0 1 67 26" class="gauge-arc green"></path>
+            <path d="M 67 26 A 90 90 0 0 1 110 14" class="gauge-arc yellow"></path>
+            <path d="M 110 14 A 90 90 0 0 1 153 26" class="gauge-arc orange"></path>
+            <path d="M 153 26 A 90 90 0 0 1 200 104" class="gauge-arc red"></path>
+            <line id="risk-needle" x1="110" y1="104" x2="110" y2="28" class="gauge-needle"></line>
+            <circle cx="110" cy="104" r="7" class="gauge-hub"></circle>
+            <text x="110" y="78" text-anchor="middle" class="gauge-label">SYSTEM THREAT</text>
+            <text id="risk-meter-text" x="110" y="96" text-anchor="middle" class="gauge-value">NOMINAL</text>
+          </svg>
+        </section>
+      </aside>
+    </main>
+
+    <section class="bottom-grid">
+      <article id="panel-prediction" class="bottom-panel hud-panel">
+        <div class="section-title-row">
+          <h2>CONJUNCTION ANALYSIS</h2>
+          <span class="inline-tag">PREDICTIVE ENGINE</span>
+        </div>
+
+        <div class="selector-row">
+          <label class="selector-label">
+            <span>Primary Sat</span>
+            <select id="predict-primary"></select>
+          </label>
+          <div class="selector-bolt">&#9889;</div>
+          <label class="selector-label">
+            <span>Threat Debris</span>
+            <select id="predict-threat"></select>
+          </label>
+        </div>
+
+        <div class="params-row">
+          <label class="param-block">
+            <span>Window</span>
+            <div class="range-row">
+              <input id="window-slider" type="range" min="24" max="168" value="72">
+              <strong id="window-label">72h</strong>
+            </div>
+          </label>
+          <label class="param-block">
+            <span>Step</span>
+            <select id="step-select">
+              <option value="30">30s</option>
+              <option value="60" selected>60s</option>
+              <option value="120">120s</option>
+              <option value="180">180s</option>
+            </select>
+          </label>
+        </div>
+
+        <button id="btn-run-prediction" class="control-button primary" type="button">INITIATE TRAJECTORY ANALYSIS</button>
+        <div class="progress-track"><div id="fake-progress-bar" class="progress-fill"></div></div>
+
+        <section id="prediction-result" class="prediction-result hidden">
+          <div class="prediction-head">
+            <div id="result-risk-badge" class="result-risk-badge">GREEN</div>
+            <div id="result-pc" class="result-pc">Pc = 0.00 x 10<sup>0</sup></div>
+          </div>
+
+          <div class="probability-meter">
+            <div id="result-prob-bar" class="probability-fill"></div>
+          </div>
+
+          <div class="result-stats">
+            <div>
+              <span>MISS DIST</span>
+              <strong id="result-miss">0.00 km</strong>
+            </div>
+            <div>
+              <span>REL VEL</span>
+              <strong id="result-vel">0.000 km/s</strong>
+            </div>
+            <div>
+              <span>TCA</span>
+              <strong id="result-tca">-</strong>
+            </div>
+          </div>
+
+          <div id="maneuver-box" class="maneuver-box hidden"></div>
+          <button id="btn-show-on-globe" class="control-button secondary" type="button">SHOW ON GLOBE</button>
+        </section>
+      </article>
+
+      <article id="panel-analytics" class="bottom-panel hud-panel">
+        <div class="section-title-row">
+          <h2>ORBITAL ANALYTICS</h2>
+          <span class="inline-tag">LIVE CHARTS</span>
+        </div>
+
+        <div class="chart-block">
+          <div class="chart-head">
+            <h3>Risk Distribution</h3>
+            <span id="chart-total-conjunctions" class="chart-meta">0 conjunctions</span>
+          </div>
+          <div class="chart-canvas-wrap donut-wrap">
+            <canvas id="risk-donut-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-block">
+          <div class="chart-head">
+            <h3>Altitude Distribution</h3>
+            <span class="chart-meta">KESSLER ZONE @ 850 km</span>
+          </div>
+          <div class="chart-canvas-wrap bar-wrap">
+            <canvas id="altitude-bar-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-block sparkline-block">
+          <div class="chart-head">
+            <h3>Tracked Objects Trend</h3>
+            <span id="sparkline-latest" class="chart-meta">0 tracked</span>
+          </div>
+          <div class="chart-canvas-wrap sparkline-wrap">
+            <canvas id="objects-sparkline"></canvas>
+          </div>
+        </div>
+      </article>
+
+      <article id="panel-alerts" class="bottom-panel hud-panel">
+        <div class="section-title-row">
+          <h2>CONJUNCTION ALERTS</h2>
+          <span class="inline-tag">COMMAND CENTER</span>
+        </div>
+
+        <div class="alert-summary">
+          <span>&#128994; <b id="sum-green">0</b></span>
+          <span>&#128993; <b id="sum-yellow">0</b></span>
+          <span>&#128992; <b id="sum-orange">0</b></span>
+          <span>&#128308; <b id="sum-red">0</b></span>
+        </div>
+
+        <div class="filter-row">
+          <button class="filter-button active" data-filter="ALL" type="button">ALL</button>
+          <button class="filter-button" data-filter="UNACKED" type="button">UNACKED</button>
+          <button class="filter-button" data-filter="RED" type="button">RED</button>
+          <button class="filter-button" data-filter="ORANGE" type="button">ORANGE</button>
+        </div>
+
+        <div id="alerts-refresh-countdown" class="refresh-countdown">Refreshing in 20s</div>
+        <div id="alerts-cards" class="alerts-list"></div>
+        <div id="alerts-empty" class="alerts-empty hidden">&#10003; ALL CLEAR - NO ACTIVE THREATS</div>
+      </article>
+
+      <article id="panel-feeds" class="bottom-panel hud-panel">
+        <div class="section-title-row">
+          <h2>LIVE DATA FEEDS</h2>
+          <span class="inline-tag">INGEST + LOG</span>
+        </div>
+
+        <div class="feed-table-wrap">
+          <table class="feed-table">
+            <thead>
+              <tr>
+                <th>SOURCE</th>
+                <th>STATUS</th>
+                <th>COUNT</th>
+              </tr>
+            </thead>
+            <tbody id="feed-status-body"></tbody>
+          </table>
+        </div>
+
+        <button id="btn-sync-feeds" class="control-button secondary" type="button">SYNC ALL FEEDS</button>
+        <div class="feed-total-line">Total: <span id="feed-total-count">0</span> objects tracked</div>
+
+        <section class="system-log-block">
+          <div class="section-title-row compact">
+            <h3>SYSTEM EVENT LOG</h3>
+          </div>
+          <div id="system-log" class="log-list"></div>
+        </section>
+
+        <section class="perf-grid">
+          <div>Objects rendered: <span id="perf-rendered">0</span></div>
+          <div>Update frequency: <span>1s</span></div>
+          <div>Last full sync: <span id="perf-last-sync">never</span></div>
+          <div>Browser FPS: <span id="fps-counter">0</span></div>
+        </section>
+      </article>
+    </section>
+  </div>
+
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

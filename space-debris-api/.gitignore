@@ -1,0 +1,13 @@
+﻿__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+.env
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+space_debris.db
+*.db
+.DS_Store

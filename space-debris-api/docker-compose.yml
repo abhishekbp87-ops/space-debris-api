@@ -1,0 +1,8 @@
+﻿version: "3.9"
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    volumes: ["./space_debris.db:/app/space_debris.db"]
+    env_file: .env
+    restart: unless-stopped
